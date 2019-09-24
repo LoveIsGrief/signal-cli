@@ -2,7 +2,7 @@
 #
 # Refer to the signal-cli github pages for detailed Usage.
 #
-FROM gradle:5.6.1-jre8
+FROM gradle:5.6.1-jdk8
 
 LABEL maintainer "Kayvan Sylvan <kayvansylvan@gmail.com>"
 
