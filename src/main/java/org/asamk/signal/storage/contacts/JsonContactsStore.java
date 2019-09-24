@@ -14,12 +14,12 @@ import java.util.List;
 import java.util.Map;
 
 public class JsonContactsStore {
+
+    private static final ObjectMapper jsonProcessor = new ObjectMapper();
     @JsonProperty("contacts")
     @JsonSerialize(using = JsonContactsStore.MapToListSerializer.class)
     @JsonDeserialize(using = ContactsDeserializer.class)
     private Map<String, ContactInfo> contacts = new HashMap<>();
-
-    private static final ObjectMapper jsonProcessor = new ObjectMapper();
 
     public void updateContact(ContactInfo contact) {
         contacts.put(contact.number, contact);
@@ -40,14 +40,16 @@ public class JsonContactsStore {
         contacts.clear();
     }
 
-    public static class MapToListSerializer extends JsonSerializer<Map<?, ?>> {
+    private static class MapToListSerializer extends JsonSerializer<Map<?, ?>> {
+
         @Override
         public void serialize(final Map<?, ?> value, final JsonGenerator jgen, final SerializerProvider provider) throws IOException {
             jgen.writeObject(value.values());
         }
     }
 
-    public static class ContactsDeserializer extends JsonDeserializer<Map<String, ContactInfo>> {
+    private static class ContactsDeserializer extends JsonDeserializer<Map<String, ContactInfo>> {
+
         @Override
         public Map<String, ContactInfo> deserialize(JsonParser jsonParser, DeserializationContext deserializationContext) throws IOException {
             Map<String, ContactInfo> contacts = new HashMap<>();

@@ -42,6 +42,9 @@ wget https://github.com/AsamK/signal-cli/releases/download/v"${VERSION}"/signal-
 sudo tar xf signal-cli-"${VERSION}".tar.gz -C /opt
 sudo ln -sf /opt/signal-cli-"${VERSION}"/bin/signal-cli /usr/local/bin/
 ```
+You can find further instructions on the Wiki:
+- [Install on Ubuntu](https://github.com/AsamK/signal-cli/wiki/HowToUbuntu)
+- [DBus Service](https://github.com/AsamK/signal-cli/wiki/DBus-service)
 
 ## Usage
 
@@ -50,6 +53,8 @@ Important: The USERNAME (your phone number) must include the country calling cod
 * Register a number (with SMS verification)
 
         signal-cli -u USERNAME register
+        
+  You can register Signal using a land line number. In this case you can skip SMS verification process and jump directly to the voice call verification by adding the --voice switch at the end of above register command.
 
 * Verify the number using the code received via SMS or voice
 
@@ -73,9 +78,11 @@ For more information read the [man page](https://github.com/AsamK/signal-cli/blo
 
 The password and cryptographic keys are created when registering and stored in the current users home directory:
 
-        $HOME/.config/signal/data/
+`$XDG_DATA_HOME/signal-cli/data/` (`$HOME/.local/share/signal-cli/data/`)
 
-For legacy users, the old config directory is used as a fallback:
+For legacy users, the old config directories are used as a fallback:
+
+        $HOME/.config/signal/data/
 
         $HOME/.config/textsecure/data/
 

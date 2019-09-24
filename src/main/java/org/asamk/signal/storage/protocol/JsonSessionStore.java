@@ -2,7 +2,6 @@ package org.asamk.signal.storage.protocol;
 
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonParser;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.*;
 import org.whispersystems.libsignal.SignalProtocolAddress;
 import org.whispersystems.libsignal.state.SessionRecord;
@@ -20,10 +19,9 @@ class JsonSessionStore implements SessionStore {
 
     }
 
-    public void addSessions(Map<SignalProtocolAddress, byte[]> sessions) {
+    private void addSessions(Map<SignalProtocolAddress, byte[]> sessions) {
         this.sessions.putAll(sessions);
     }
-
 
     @Override
     public synchronized SessionRecord loadSession(SignalProtocolAddress remoteAddress) {
@@ -79,7 +77,7 @@ class JsonSessionStore implements SessionStore {
     public static class JsonSessionStoreDeserializer extends JsonDeserializer<JsonSessionStore> {
 
         @Override
-        public JsonSessionStore deserialize(JsonParser jsonParser, DeserializationContext deserializationContext) throws IOException, JsonProcessingException {
+        public JsonSessionStore deserialize(JsonParser jsonParser, DeserializationContext deserializationContext) throws IOException {
             JsonNode node = jsonParser.getCodec().readTree(jsonParser);
 
             Map<SignalProtocolAddress, byte[]> sessionMap = new HashMap<>();
@@ -105,7 +103,7 @@ class JsonSessionStore implements SessionStore {
     public static class JsonPreKeyStoreSerializer extends JsonSerializer<JsonSessionStore> {
 
         @Override
-        public void serialize(JsonSessionStore jsonSessionStore, JsonGenerator json, SerializerProvider serializerProvider) throws IOException, JsonProcessingException {
+        public void serialize(JsonSessionStore jsonSessionStore, JsonGenerator json, SerializerProvider serializerProvider) throws IOException {
             json.writeStartArray();
             for (Map.Entry<SignalProtocolAddress, byte[]> preKey : jsonSessionStore.sessions.entrySet()) {
                 json.writeStartObject();

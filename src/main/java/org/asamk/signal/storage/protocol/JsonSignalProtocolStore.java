@@ -21,22 +21,22 @@ public class JsonSignalProtocolStore implements SignalProtocolStore {
     @JsonProperty("preKeys")
     @JsonDeserialize(using = JsonPreKeyStore.JsonPreKeyStoreDeserializer.class)
     @JsonSerialize(using = JsonPreKeyStore.JsonPreKeyStoreSerializer.class)
-    protected JsonPreKeyStore preKeyStore;
+    private JsonPreKeyStore preKeyStore;
 
     @JsonProperty("sessionStore")
     @JsonDeserialize(using = JsonSessionStore.JsonSessionStoreDeserializer.class)
     @JsonSerialize(using = JsonSessionStore.JsonPreKeyStoreSerializer.class)
-    protected JsonSessionStore sessionStore;
+    private JsonSessionStore sessionStore;
 
     @JsonProperty("signedPreKeyStore")
     @JsonDeserialize(using = JsonSignedPreKeyStore.JsonSignedPreKeyStoreDeserializer.class)
     @JsonSerialize(using = JsonSignedPreKeyStore.JsonSignedPreKeyStoreSerializer.class)
-    protected JsonSignedPreKeyStore signedPreKeyStore;
+    private JsonSignedPreKeyStore signedPreKeyStore;
 
     @JsonProperty("identityKeyStore")
     @JsonDeserialize(using = JsonIdentityKeyStore.JsonIdentityKeyStoreDeserializer.class)
     @JsonSerialize(using = JsonIdentityKeyStore.JsonIdentityKeyStoreSerializer.class)
-    protected JsonIdentityKeyStore identityKeyStore;
+    private JsonIdentityKeyStore identityKeyStore;
 
     public JsonSignalProtocolStore() {
     }
@@ -85,6 +85,11 @@ public class JsonSignalProtocolStore implements SignalProtocolStore {
     @Override
     public boolean isTrustedIdentity(SignalProtocolAddress address, IdentityKey identityKey, Direction direction) {
         return identityKeyStore.isTrustedIdentity(address, identityKey, direction);
+    }
+
+    @Override
+    public IdentityKey getIdentity(SignalProtocolAddress address) {
+        return identityKeyStore.getIdentity(address);
     }
 
     @Override

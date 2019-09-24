@@ -2,7 +2,6 @@ package org.asamk.signal.storage.protocol;
 
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonParser;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.*;
 import org.whispersystems.libsignal.InvalidKeyIdException;
 import org.whispersystems.libsignal.state.SignedPreKeyRecord;
@@ -23,8 +22,7 @@ class JsonSignedPreKeyStore implements SignedPreKeyStore {
 
     }
 
-
-    public void addSignedPreKeys(Map<Integer, byte[]> preKeys) {
+    private void addSignedPreKeys(Map<Integer, byte[]> preKeys) {
         store.putAll(preKeys);
     }
 
@@ -74,9 +72,8 @@ class JsonSignedPreKeyStore implements SignedPreKeyStore {
     public static class JsonSignedPreKeyStoreDeserializer extends JsonDeserializer<JsonSignedPreKeyStore> {
 
         @Override
-        public JsonSignedPreKeyStore deserialize(JsonParser jsonParser, DeserializationContext deserializationContext) throws IOException, JsonProcessingException {
+        public JsonSignedPreKeyStore deserialize(JsonParser jsonParser, DeserializationContext deserializationContext) throws IOException {
             JsonNode node = jsonParser.getCodec().readTree(jsonParser);
-
 
             Map<Integer, byte[]> preKeyMap = new HashMap<>();
             if (node.isArray()) {
@@ -101,7 +98,7 @@ class JsonSignedPreKeyStore implements SignedPreKeyStore {
     public static class JsonSignedPreKeyStoreSerializer extends JsonSerializer<JsonSignedPreKeyStore> {
 
         @Override
-        public void serialize(JsonSignedPreKeyStore jsonPreKeyStore, JsonGenerator json, SerializerProvider serializerProvider) throws IOException, JsonProcessingException {
+        public void serialize(JsonSignedPreKeyStore jsonPreKeyStore, JsonGenerator json, SerializerProvider serializerProvider) throws IOException {
             json.writeStartArray();
             for (Map.Entry<Integer, byte[]> signedPreKey : jsonPreKeyStore.store.entrySet()) {
                 json.writeStartObject();
