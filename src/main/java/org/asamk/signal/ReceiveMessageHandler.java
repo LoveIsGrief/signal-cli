@@ -5,9 +5,27 @@ import org.asamk.signal.storage.contacts.ContactInfo;
 import org.asamk.signal.storage.groups.GroupInfo;
 import org.asamk.signal.util.DateUtils;
 import org.asamk.signal.util.Util;
-import org.whispersystems.signalservice.api.messages.*;
-import org.whispersystems.signalservice.api.messages.calls.*;
-import org.whispersystems.signalservice.api.messages.multidevice.*;
+import org.whispersystems.signalservice.api.messages.SignalServiceAttachment;
+import org.whispersystems.signalservice.api.messages.SignalServiceAttachmentPointer;
+import org.whispersystems.signalservice.api.messages.SignalServiceContent;
+import org.whispersystems.signalservice.api.messages.SignalServiceDataMessage;
+import org.whispersystems.signalservice.api.messages.SignalServiceEnvelope;
+import org.whispersystems.signalservice.api.messages.SignalServiceGroup;
+import org.whispersystems.signalservice.api.messages.SignalServiceReceiptMessage;
+import org.whispersystems.signalservice.api.messages.SignalServiceTypingMessage;
+import org.whispersystems.signalservice.api.messages.calls.AnswerMessage;
+import org.whispersystems.signalservice.api.messages.calls.BusyMessage;
+import org.whispersystems.signalservice.api.messages.calls.HangupMessage;
+import org.whispersystems.signalservice.api.messages.calls.IceUpdateMessage;
+import org.whispersystems.signalservice.api.messages.calls.OfferMessage;
+import org.whispersystems.signalservice.api.messages.calls.SignalServiceCallMessage;
+import org.whispersystems.signalservice.api.messages.multidevice.BlockedListMessage;
+import org.whispersystems.signalservice.api.messages.multidevice.ConfigurationMessage;
+import org.whispersystems.signalservice.api.messages.multidevice.ContactsMessage;
+import org.whispersystems.signalservice.api.messages.multidevice.ReadMessage;
+import org.whispersystems.signalservice.api.messages.multidevice.SentTranscriptMessage;
+import org.whispersystems.signalservice.api.messages.multidevice.SignalServiceSyncMessage;
+import org.whispersystems.signalservice.api.messages.multidevice.VerifiedMessage;
 import org.whispersystems.signalservice.api.push.SignalServiceAddress;
 import org.whispersystems.signalservice.internal.util.Base64;
 
@@ -37,7 +55,7 @@ public class ReceiveMessageHandler implements Manager.ReceiveMessageHandler {
 
         if (envelope.isReceipt()) {
             System.out.println("Got receipt.");
-        } else if (envelope.isSignalMessage() | envelope.isPreKeySignalMessage()) {
+        } else if (envelope.isSignalMessage() || envelope.isPreKeySignalMessage() || envelope.isUnidentifiedSender()) {
             if (exception != null) {
                 if (exception instanceof org.whispersystems.libsignal.UntrustedIdentityException) {
                     org.whispersystems.libsignal.UntrustedIdentityException e = (org.whispersystems.libsignal.UntrustedIdentityException) exception;
@@ -51,6 +69,7 @@ public class ReceiveMessageHandler implements Manager.ReceiveMessageHandler {
             if (content == null) {
                 System.out.println("Failed to decrypt message.");
             } else {
+                System.out.println(String.format("Sender: %s (device: %d)", content.getSender(), content.getSenderDevice()));
                 if (content.getDataMessage().isPresent()) {
                     SignalServiceDataMessage message = content.getDataMessage().get();
                     handleSignalServiceDataMessage(message);
