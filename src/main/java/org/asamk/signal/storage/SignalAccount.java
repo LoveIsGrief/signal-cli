@@ -21,7 +21,7 @@ import org.whispersystems.libsignal.state.PreKeyRecord;
 import org.whispersystems.libsignal.state.SignedPreKeyRecord;
 import org.whispersystems.libsignal.util.Medium;
 import org.whispersystems.signalservice.api.push.SignalServiceAddress;
-import org.whispersystems.signalservice.internal.util.Base64;
+import org.whispersystems.util.Base64;
 
 import java.io.File;
 import java.io.IOException;
@@ -269,6 +269,10 @@ public class SignalAccount {
 
     public String getUsername() {
         return username;
+    }
+
+    public SignalServiceAddress getSelfAddress() {
+        return new SignalServiceAddress(null, username);
     }
 
     public int getDeviceId() {
