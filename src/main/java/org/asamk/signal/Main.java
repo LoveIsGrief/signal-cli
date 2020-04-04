@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2015-2018 AsamK
+  Copyright (C) 2015-2020 AsamK and contributors
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -38,6 +38,7 @@ import org.asamk.signal.util.SecurityProvider;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.freedesktop.dbus.DBusConnection;
 import org.freedesktop.dbus.exceptions.DBusException;
+import org.whispersystems.signalservice.api.push.exceptions.AuthorizationFailedException;
 import org.whispersystems.signalservice.api.util.PhoneNumberFormatter;
 
 import java.io.File;
@@ -49,9 +50,7 @@ import static org.whispersystems.signalservice.internal.util.Util.isEmpty;
 public class Main {
 
     public static void main(String[] args) {
-        // Register our own security provider
-        Security.insertProviderAt(new SecurityProvider(), 1);
-        Security.addProvider(new BouncyCastleProvider());
+        installSecurityProviderWorkaround();
 
         Namespace ns = parseArgs(args);
         if (ns == null) {
@@ -60,6 +59,12 @@ public class Main {
 
         int res = handleCommands(ns);
         System.exit(res);
+    }
+
+    public static void installSecurityProviderWorkaround() {
+        // Register our own security provider
+        Security.insertProviderAt(new SecurityProvider(), 1);
+        Security.addProvider(new BouncyCastleProvider());
     }
 
     private static int handleCommands(Namespace ns) {
@@ -101,6 +106,12 @@ public class Main {
                 ts = m;
                 try {
                     m.init();
+                } catch (AuthorizationFailedException e) {
+                    if (!"register".equals(ns.getString("command"))) {
+                        // Register command should still be possible, if current authorization fails
+                        System.err.println("Authorization failed, was the number registered elsewhere?");
+                        return 2;
+                    }
                 } catch (Exception e) {
                     System.err.println("Error loading state file: " + e.getMessage());
                     return 2;

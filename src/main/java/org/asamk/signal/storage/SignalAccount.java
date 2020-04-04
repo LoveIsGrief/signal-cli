@@ -10,12 +10,21 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import org.asamk.signal.storage.contacts.ContactInfo;
 import org.asamk.signal.storage.contacts.JsonContactsStore;
+import org.asamk.signal.storage.groups.GroupInfo;
 import org.asamk.signal.storage.groups.JsonGroupStore;
+import org.asamk.signal.storage.protocol.JsonIdentityKeyStore;
 import org.asamk.signal.storage.protocol.JsonSignalProtocolStore;
-import org.asamk.signal.storage.threads.JsonThreadStore;
+import org.asamk.signal.storage.protocol.RecipientStore;
+import org.asamk.signal.storage.protocol.SessionInfo;
+import org.asamk.signal.storage.protocol.SignalServiceAddressResolver;
+import org.asamk.signal.storage.threads.LegacyJsonThreadStore;
+import org.asamk.signal.storage.threads.ThreadInfo;
 import org.asamk.signal.util.IOUtils;
 import org.asamk.signal.util.Util;
+import org.signal.zkgroup.InvalidInputException;
+import org.signal.zkgroup.profiles.ProfileKey;
 import org.whispersystems.libsignal.IdentityKeyPair;
 import org.whispersystems.libsignal.state.PreKeyRecord;
 import org.whispersystems.libsignal.state.SignedPreKeyRecord;
@@ -30,6 +39,8 @@ import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.util.Collection;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 public class SignalAccount {
 
@@ -37,12 +48,13 @@ public class SignalAccount {
     private FileChannel fileChannel;
     private FileLock lock;
     private String username;
+    private UUID uuid;
     private int deviceId = SignalServiceAddress.DEFAULT_DEVICE_ID;
     private boolean isMultiDevice = false;
     private String password;
     private String registrationLockPin;
     private String signalingKey;
-    private byte[] profileKey;
+    private ProfileKey profileKey;
     private int preKeyIdOffset;
     private int nextSignedPreKeyId;
 
@@ -51,7 +63,7 @@ public class SignalAccount {
     private JsonSignalProtocolStore signalProtocolStore;
     private JsonGroupStore groupStore;
     private JsonContactsStore contactStore;
-    private JsonThreadStore threadStore;
+    private RecipientStore recipientStore;
 
     private SignalAccount() {
         jsonProcessor.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.NONE); // disable autodetect
@@ -70,7 +82,7 @@ public class SignalAccount {
         return account;
     }
 
-    public static SignalAccount create(String dataPath, String username, IdentityKeyPair identityKey, int registrationId, byte[] profileKey) throws IOException {
+    public static SignalAccount create(String dataPath, String username, IdentityKeyPair identityKey, int registrationId, ProfileKey profileKey) throws IOException {
         IOUtils.createPrivateDirectories(dataPath);
 
         SignalAccount account = new SignalAccount();
@@ -80,28 +92,29 @@ public class SignalAccount {
         account.profileKey = profileKey;
         account.signalProtocolStore = new JsonSignalProtocolStore(identityKey, registrationId);
         account.groupStore = new JsonGroupStore();
-        account.threadStore = new JsonThreadStore();
         account.contactStore = new JsonContactsStore();
+        account.recipientStore = new RecipientStore();
         account.registered = false;
 
         return account;
     }
 
-    public static SignalAccount createLinkedAccount(String dataPath, String username, String password, int deviceId, IdentityKeyPair identityKey, int registrationId, String signalingKey, byte[] profileKey) throws IOException {
+    public static SignalAccount createLinkedAccount(String dataPath, String username, UUID uuid, String password, int deviceId, IdentityKeyPair identityKey, int registrationId, String signalingKey, ProfileKey profileKey) throws IOException {
         IOUtils.createPrivateDirectories(dataPath);
 
         SignalAccount account = new SignalAccount();
         account.openFileChannel(getFileName(dataPath, username));
 
         account.username = username;
+        account.uuid = uuid;
         account.password = password;
         account.profileKey = profileKey;
         account.deviceId = deviceId;
         account.signalingKey = signalingKey;
         account.signalProtocolStore = new JsonSignalProtocolStore(identityKey, registrationId);
         account.groupStore = new JsonGroupStore();
-        account.threadStore = new JsonThreadStore();
         account.contactStore = new JsonContactsStore();
+        account.recipientStore = new RecipientStore();
         account.registered = true;
         account.isMultiDevice = true;
 
@@ -136,6 +149,14 @@ public class SignalAccount {
             rootNode = jsonProcessor.readTree(Channels.newInputStream(fileChannel));
         }
 
+        JsonNode uuidNode = rootNode.get("uuid");
+        if (uuidNode != null && !uuidNode.isNull()) {
+            try {
+                uuid = UUID.fromString(uuidNode.asText());
+            } catch (IllegalArgumentException e) {
+                throw new IOException("Config file contains an invalid uuid, needs to be a valid UUID", e);
+            }
+        }
         JsonNode node = rootNode.get("deviceId");
         if (node != null) {
             deviceId = node.asInt();
@@ -161,7 +182,11 @@ public class SignalAccount {
             nextSignedPreKeyId = 0;
         }
         if (rootNode.has("profileKey")) {
-            profileKey = Base64.decode(Util.getNotNullNode(rootNode, "profileKey").asText());
+            try {
+                profileKey = new ProfileKey(Base64.decode(Util.getNotNullNode(rootNode, "profileKey").asText()));
+            } catch (InvalidInputException e) {
+                throw new IOException("Config file contains an invalid profileKey, needs to be base64 encoded array of 32 bytes", e);
+            }
         }
 
         signalProtocolStore = jsonProcessor.convertValue(Util.getNotNullNode(rootNode, "axolotlStore"), JsonSignalProtocolStore.class);
@@ -181,12 +206,58 @@ public class SignalAccount {
         if (contactStore == null) {
             contactStore = new JsonContactsStore();
         }
+
+        JsonNode recipientStoreNode = rootNode.get("recipientStore");
+        if (recipientStoreNode != null) {
+            recipientStore = jsonProcessor.convertValue(recipientStoreNode, RecipientStore.class);
+        }
+        if (recipientStore == null) {
+            recipientStore = new RecipientStore();
+
+            recipientStore.resolveServiceAddress(getSelfAddress());
+
+            for (ContactInfo contact : contactStore.getContacts()) {
+                recipientStore.resolveServiceAddress(contact.getAddress());
+            }
+
+            for (GroupInfo group : groupStore.getGroups()) {
+                group.members = group.members.stream()
+                        .map(m -> recipientStore.resolveServiceAddress(m))
+                        .collect(Collectors.toSet());
+            }
+
+            for (SessionInfo session : signalProtocolStore.getSessions()) {
+                session.address = recipientStore.resolveServiceAddress(session.address);
+            }
+
+            for (JsonIdentityKeyStore.Identity identity : signalProtocolStore.getIdentities()) {
+                identity.setAddress(recipientStore.resolveServiceAddress(identity.getAddress()));
+            }
+        }
+
         JsonNode threadStoreNode = rootNode.get("threadStore");
         if (threadStoreNode != null) {
-            threadStore = jsonProcessor.convertValue(threadStoreNode, JsonThreadStore.class);
-        }
-        if (threadStore == null) {
-            threadStore = new JsonThreadStore();
+            LegacyJsonThreadStore threadStore = jsonProcessor.convertValue(threadStoreNode, LegacyJsonThreadStore.class);
+            // Migrate thread info to group and contact store
+            for (ThreadInfo thread : threadStore.getThreads()) {
+                if (thread.id == null || thread.id.isEmpty()) {
+                    continue;
+                }
+                try {
+                    ContactInfo contactInfo = contactStore.getContact(new SignalServiceAddress(null, thread.id));
+                    if (contactInfo != null) {
+                        contactInfo.messageExpirationTime = thread.messageExpirationTime;
+                        contactStore.updateContact(contactInfo);
+                    } else {
+                        GroupInfo groupInfo = groupStore.getGroup(Base64.decode(thread.id));
+                        if (groupInfo != null) {
+                            groupInfo.messageExpirationTime = thread.messageExpirationTime;
+                            groupStore.updateGroup(groupInfo);
+                        }
+                    }
+                } catch (Exception ignored) {
+                }
+            }
         }
     }
 
@@ -196,6 +267,7 @@ public class SignalAccount {
         }
         ObjectNode rootNode = jsonProcessor.createObjectNode();
         rootNode.put("username", username)
+                .put("uuid", uuid == null ? null : uuid.toString())
                 .put("deviceId", deviceId)
                 .put("isMultiDevice", isMultiDevice)
                 .put("password", password)
@@ -203,12 +275,12 @@ public class SignalAccount {
                 .put("signalingKey", signalingKey)
                 .put("preKeyIdOffset", preKeyIdOffset)
                 .put("nextSignedPreKeyId", nextSignedPreKeyId)
-                .put("profileKey", Base64.encodeBytes(profileKey))
+                .put("profileKey", Base64.encodeBytes(profileKey.serialize()))
                 .put("registered", registered)
                 .putPOJO("axolotlStore", signalProtocolStore)
                 .putPOJO("groupStore", groupStore)
                 .putPOJO("contactStore", contactStore)
-                .putPOJO("threadStore", threadStore)
+                .putPOJO("recipientStore", recipientStore)
         ;
         try {
             synchronized (fileChannel) {
@@ -239,6 +311,10 @@ public class SignalAccount {
         }
     }
 
+    public void setResolver(final SignalServiceAddressResolver resolver) {
+        signalProtocolStore.setResolver(resolver);
+    }
+
     public void addPreKeys(Collection<PreKeyRecord> records) {
         for (PreKeyRecord record : records) {
             signalProtocolStore.storePreKey(record.getId(), record);
@@ -263,16 +339,24 @@ public class SignalAccount {
         return contactStore;
     }
 
-    public JsonThreadStore getThreadStore() {
-        return threadStore;
+    public RecipientStore getRecipientStore() {
+        return recipientStore;
     }
 
     public String getUsername() {
         return username;
     }
 
+    public UUID getUuid() {
+        return uuid;
+    }
+
+    public void setUuid(final UUID uuid) {
+        this.uuid = uuid;
+    }
+
     public SignalServiceAddress getSelfAddress() {
-        return new SignalServiceAddress(null, username);
+        return new SignalServiceAddress(uuid, username);
     }
 
     public int getDeviceId() {
@@ -291,6 +375,10 @@ public class SignalAccount {
         return registrationLockPin;
     }
 
+    public String getRegistrationLock() {
+        return null; // TODO implement KBS
+    }
+
     public void setRegistrationLockPin(final String registrationLockPin) {
         this.registrationLockPin = registrationLockPin;
     }
@@ -303,11 +391,11 @@ public class SignalAccount {
         this.signalingKey = signalingKey;
     }
 
-    public byte[] getProfileKey() {
+    public ProfileKey getProfileKey() {
         return profileKey;
     }
 
-    public void setProfileKey(final byte[] profileKey) {
+    public void setProfileKey(final ProfileKey profileKey) {
         this.profileKey = profileKey;
     }
 

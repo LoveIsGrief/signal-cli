@@ -6,23 +6,28 @@ import org.freedesktop.dbus.DBusInterface;
 import org.freedesktop.dbus.DBusSignal;
 import org.freedesktop.dbus.exceptions.DBusException;
 import org.whispersystems.signalservice.api.push.exceptions.EncapsulatedExceptions;
+import org.whispersystems.signalservice.api.util.InvalidNumberException;
 
 import java.io.IOException;
 import java.util.List;
 
 public interface Signal extends DBusInterface {
 
-    void sendMessage(String message, List<String> attachments, String recipient) throws EncapsulatedExceptions, AttachmentInvalidException, IOException;
+    long sendMessage(String message, List<String> attachments, String recipient) throws EncapsulatedExceptions, AttachmentInvalidException, IOException, InvalidNumberException;
 
-    void sendMessage(String message, List<String> attachments, List<String> recipients) throws EncapsulatedExceptions, AttachmentInvalidException, IOException;
+    long sendMessage(String message, List<String> attachments, List<String> recipients) throws EncapsulatedExceptions, AttachmentInvalidException, IOException, InvalidNumberException;
 
-    void sendEndSessionMessage(List<String> recipients) throws IOException, EncapsulatedExceptions;
+    void sendEndSessionMessage(List<String> recipients) throws IOException, EncapsulatedExceptions, InvalidNumberException;
 
-    void sendGroupMessage(String message, List<String> attachments, byte[] groupId) throws EncapsulatedExceptions, GroupNotFoundException, AttachmentInvalidException, IOException;
+    long sendGroupMessage(String message, List<String> attachments, byte[] groupId) throws EncapsulatedExceptions, GroupNotFoundException, AttachmentInvalidException, IOException;
 
-    String getContactName(String number);
+    String getContactName(String number) throws InvalidNumberException;
 
-    void setContactName(String number, String name);
+    void setContactName(String number, String name) throws InvalidNumberException;
+
+    void setContactBlocked(String number, boolean blocked) throws InvalidNumberException;
+
+    void setGroupBlocked(byte[] groupId, boolean blocked) throws GroupNotFoundException;
 
     List<byte[]> getGroupIds();
 
@@ -30,7 +35,7 @@ public interface Signal extends DBusInterface {
 
     List<String> getGroupMembers(byte[] groupId);
 
-    byte[] updateGroup(byte[] groupId, String name, List<String> members, String avatar) throws IOException, EncapsulatedExceptions, GroupNotFoundException, AttachmentInvalidException;
+    byte[] updateGroup(byte[] groupId, String name, List<String> members, String avatar) throws IOException, EncapsulatedExceptions, GroupNotFoundException, AttachmentInvalidException, InvalidNumberException;
 
     boolean isRegistered();
 
@@ -89,6 +94,49 @@ public interface Signal extends DBusInterface {
 
         public String getSender() {
             return sender;
+        }
+    }
+
+    class SyncMessageReceived extends DBusSignal {
+        private long timestamp;
+        private String source;
+        private String destination;
+        private byte[] groupId;
+        private String message;
+        private List<String> attachments;
+
+        public SyncMessageReceived(String objectpath, long timestamp, String source, String destination, byte[] groupId, String message, List<String> attachments) throws DBusException {
+            super(objectpath, timestamp, source, destination, groupId, message, attachments);
+            this.timestamp = timestamp;
+            this.source = source;
+            this.destination = destination;
+            this.groupId = groupId;
+            this.message = message;
+            this.attachments = attachments;
+        }
+
+        public long getTimestamp() {
+            return timestamp;
+        }
+
+        public String getSource() {
+            return source;
+        }
+
+        public String getDestination() {
+            return destination;
+        }
+
+        public byte[] getGroupId() {
+            return groupId;
+        }
+
+        public String getMessage() {
+            return message;
+        }
+
+        public List<String> getAttachments() {
+            return attachments;
         }
     }
 }
